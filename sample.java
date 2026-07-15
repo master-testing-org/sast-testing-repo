@@ -1,11 +1,18 @@
 import java.io.IOException;
+import java.util.Arrays;
+
 public class Sample {
     public static void main(String[] args) throws IOException {
-        String password = System.getenv("APP_PASSWORD");
-        // Command Injection (SAST finding)[
+        String envPassword = System.getenv("APP_PASSWORD");
+        char[] password = envPassword != null ? envPassword.toCharArray() : new char[0];
+        try {
+            // use password here
+        } finally {
+            Arrays.fill(password, '\0');
+        }
+
         if (args.length > 0) {
-            String command = "ping " + args[0];
-            Runtime.getRuntime().exec(command);
+            new ProcessBuilder("ping", args[0]).start();
         }
     }
 }
