@@ -6,7 +6,7 @@ public class Sample {
         String envPassword = System.getenv("APP_PASSWORD");
         char[] password = envPassword != null ? envPassword.toCharArray() : new char[0];
         try {
-            // use password herek
+            // use password here
         } finally {
             Arrays.fill(password, '\0');
         }
