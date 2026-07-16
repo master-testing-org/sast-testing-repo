@@ -41,14 +41,6 @@ public class Install extends HttpServlet {
         "com.microsoft.sqlserver.jdbc.SQLServerDriver"
     ));
 
-       static String dburl;
-       static String jdbcdriver;
-       static String dbuser;
-       static String dbpass;
-       static String dbname;
-       static String siteTitle;
-       static String adminuser;
-       static String adminpass;
 
     /**
      * Processes requests for HTTP <code>POST</code> method.
@@ -77,14 +69,14 @@ public class Install extends HttpServlet {
         String configPath=getServletContext().getRealPath("/WEB-INF/config.properties");
 
         //Getting Database Configuration from User Input
-        dburl = request.getParameter("dburl");
-        jdbcdriver = request.getParameter("jdbcdriver");
-        dbuser = request.getParameter("dbuser");
-        dbpass = request.getParameter("dbpass");
-        dbname = request.getParameter("dbname");
-        siteTitle= request.getParameter("siteTitle");
-        adminuser= request.getParameter("adminuser");
-        adminpass= HashMe.hashMe(request.getParameter("adminpass"));
+        String dburl = request.getParameter("dburl");
+        String jdbcdriver = request.getParameter("jdbcdriver");
+        String dbuser = request.getParameter("dbuser");
+        String dbpass = request.getParameter("dbpass");
+        String dbname = request.getParameter("dbname");
+        String siteTitle= request.getParameter("siteTitle");
+        String adminuser= request.getParameter("adminuser");
+        String adminpass= HashMe.hashMe(request.getParameter("adminpass"));
 
         // CWE-470: Validate jdbcdriver against an allowlist before Class.forName()
         if (jdbcdriver == null || !ALLOWED_JDBC_DRIVERS.contains(jdbcdriver)) {
@@ -128,7 +120,7 @@ public class Install extends HttpServlet {
             out.println("<title>Servlet install</title>");
             out.println("</head>");
             out.println("<body>");
-            if(setup(i))
+            if(setup(i, dburl, dbname, dbuser, dbpass, jdbcdriver, adminuser, adminpass))
             {
                 out.print("successfully installed");
             }
@@ -158,20 +150,22 @@ public class Install extends HttpServlet {
                url.startsWith("jdbc:oracle:thin:@localhost");
     }
 
-     protected boolean setup(String i) throws IOException
+     private boolean setup(String i, String dburl, String dbname, String dbuser, String dbpass, String jdbcdriver, String adminuser, String adminpass) throws IOException
     {
+       // Defense-in-depth: re-validate all tainted inputs at the sink boundary (CWE-89, CWE-918, CWE-99)
+       if (dbname == null || !dbname.matches("^[a-zA-Z0-9_]+$")) return false;
+       if (dburl == null || !isAllowedDbUrl(dburl)) return false;
+       if (jdbcdriver == null || !ALLOWED_JDBC_DRIVERS.contains(jdbcdriver)) return false;
 
        if(i.equals("1"))
        {
 
                     try
                    {
-                    // jdbcdriver already validated against allowlist (CWE-470)
                     Class.forName(jdbcdriver);
                     Connection con= DriverManager.getConnection(dburl,dbuser,dbpass);
                       if(con!=null && !con.isClosed())
                         {
-                            //Database creation — dbname validated as alphanumeric only (CWE-89)
                              Statement stmt = con.createStatement();
                              stmt.executeUpdate("DROP DATABASE IF EXISTS "+dbname);
 
@@ -269,7 +263,12 @@ public class Install extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        // CWE-352: Generate CSRF token on GET and store in session for POST validation
+        // CWE-384: Invalidate any existing session to prevent session fixation, then issue a new one
+        HttpSession oldSession = request.getSession(false);
+        if (oldSession != null) {
+            oldSession.invalidate();
+        }
+        // CWE-352: Generate CSRF token on GET and store in fresh session for POST validation
         HttpSession session = request.getSession(true);
         String csrfToken = UUID.randomUUID().toString();
         session.setAttribute("csrfToken", csrfToken);
